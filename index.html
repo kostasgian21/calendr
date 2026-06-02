@@ -76,6 +76,18 @@
             border-bottom: 1px solid var(--border);
         }
         .result-item:last-child { border-bottom: none; }
+		
+		.vote-count {
+            font-size: 0.8rem;
+            color: #475569;
+            background: #f1f5f9;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            display: block;
+            margin: 0.4rem auto 0 auto;
+            width: fit-content;
+            cursor: help; /* Changes the mouse to a question mark on hover */
+        }
     </style>
 </head>
 <body>
@@ -136,32 +148,62 @@
         }
 
         // --- 2. BUILD TABLE (Same as before) ---
+        // --- 2. BUILD TABLE WITH VOTE COUNTS ---
         function renderTable() {
             const thead = document.getElementById('tableHead');
             const tbody = document.getElementById('tableBody');
 
+            // Pre-calculate the vote counts for easy lookup
+            const slotCounts = {};
+            votesDB.forEach(vote => {
+                vote.slots.forEach(slot => {
+                    if (!slotCounts[slot]) slotCounts[slot] = [];
+                    slotCounts[slot].push(vote.name);
+                });
+            });
+
+            // Build Header
             let headerHTML = '<tr><th>Time</th>';
             POLL_DAYS.forEach(day => headerHTML += `<th>${day}</th>`);
             headerHTML += '</tr>';
             thead.innerHTML = headerHTML;
 
+            // Build Body
             let bodyHTML = '';
             POLL_SLOTS.forEach(slot => {
                 bodyHTML += `<tr><td><strong>${slot}</strong></td>`;
                 POLL_DAYS.forEach(day => {
                     const checkboxValue = `${day} - ${slot}`;
-                    bodyHTML += `<td><input type="checkbox" value="${checkboxValue}"></td>`;
+                    const voters = slotCounts[checkboxValue] || [];
+                    
+                    let countHTML = '';
+                    if (voters.length > 0) {
+                        // The 'title' attribute creates the native hover tooltip!
+                        countHTML = `<span class="vote-count" title="Available: ${voters.join(', ')}">
+                                        ${voters.length} 👤
+                                     </span>`;
+                    }
+
+                    bodyHTML += `
+                        <td>
+                            <input type="checkbox" value="${checkboxValue}">
+                            ${countHTML}
+                        </td>`;
                 });
                 bodyHTML += `</tr>`;
             });
             tbody.innerHTML = bodyHTML;
         }
 
-        // --- 3. FETCH VOTES (Same as before) ---
+        // --- 3. FETCH VOTES ---
         async function fetchVotes() {
             const { data, error } = await db.from('meeting_votes').select('*');
             if (error) return;
+            
             votesDB = data;
+            
+            // Re-render both the results list AND the table so the badges show up!
+            renderTable(); 
             renderResults();
         }
 
