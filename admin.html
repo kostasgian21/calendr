@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poll Admin Panel</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* Reusing your clean styles */
+        body { font-family: system-ui, sans-serif; background: #f8fafc; color: #0f172a; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+        .card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); margin-bottom: 1rem; }
+        input, button { padding: 0.5rem; margin: 0.5rem 0; font-size: 1rem; border: 1px solid #e2e8f0; border-radius: 4px; }
+        button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: bold; width: 100%; }
+        button:hover { background: #1d4ed8; }
+        .danger-btn { background: #dc2626; }
+        .danger-btn:hover { background: #b91c1c; }
+        .list-box { background: #f1f5f9; padding: 1rem; border-radius: 4px; min-height: 50px; margin-bottom: 1rem; }
+        .flex { display: flex; gap: 0.5rem; }
+        .flex input { flex: 1; }
+        .flex button { width: auto; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>⚙️ Admin: Setup New Poll</h1>
+        <p>Use this page to set the dates and times for your next meeting.</p>
+        
+        <h3>1. Pick Dates</h3>
+        <div class="flex">
+            <input type="date" id="datePicker">
+            <button onclick="addDate()">Add Date</button>
+        </div>
+        <div id="daysList" class="list-box">No days added.</div>
+
+        <h3>2. Set Time Slots</h3>
+        <div class="flex">
+            <input type="text" id="timeInput" placeholder="e.g., 9:00 AM or Morning">
+            <button onclick="addTime()">Add Time</button>
+        </div>
+        <div id="slotsList" class="list-box">No times added.</div>
+
+        <hr style="border: 1px solid #e2e8f0; margin: 2rem 0;">
+
+        <h3>3. Publish Poll</h3>
+        <p style="font-size: 0.9em; color: #64748b;">Publishing will update the live poll and permanently delete all old votes.</p>
+        <button class="danger-btn" onclick="publishPoll()">Publish & Reset Old Votes</button>
+    </div>
+
+    <script>
+        // REPLACE WITH YOUR SUPABASE CREDENTIALS
+        const SUPABASE_URL = 'https://ueroccscvjfvmufjxwre.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlcm9jY3Njdmpmdm11Zmp4d3JlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzODUwMjEsImV4cCI6MjA5NTk2MTAyMX0.rsGF_44kiazj8DL54E65ZVnm4nqqy1OxDKe49OCB6Ds';
+
+        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let selectedDays = [];
+        let selectedSlots = [];
+
+        function addDate() {
+            const dateVal = document.getElementById('datePicker').value;
+            if (!dateVal) return;
+            
+            // Format the date nicely (e.g., "Mon, Oct 12")
+            const dateObj = new Date(dateVal);
+            const formatted = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+            
+            if (!selectedDays.includes(formatted)) selectedDays.push(formatted);
+            updateUI();
+        }
+
+        function addTime() {
+            const timeVal = document.getElementById('timeInput').value.trim();
+            if (timeVal && !selectedSlots.includes(timeVal)) selectedSlots.push(timeVal);
+            document.getElementById('timeInput').value = '';
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('daysList').innerHTML = selectedDays.join(', ') || 'No days added.';
+            document.getElementById('slotsList').innerHTML = selectedSlots.join(', ') || 'No times added.';
+        }
+
+        async function publishPoll() {
+            if (selectedDays.length === 0 || selectedSlots.length === 0) {
+                alert("Please add at least one day and one time slot.");
+                return;
+            }
+
+            if (!confirm("Are you sure? This will delete all current votes!")) return;
+
+            // 1. Update the config in the database
+            await db.from('poll_config').update({ days: selectedDays, slots: selectedSlots }).neq('id', 0);
+
+            // 2. Delete all old votes (using a condition that is always true to clear the table)
+            await db.from('meeting_votes').delete().neq('name', 'impossible_string');
+
+            alert("Poll updated successfully! Your partners will now see the new dates.");
+            selectedDays = []; selectedSlots = []; updateUI();
+        }
+    </script>
+</body>
+</html>
