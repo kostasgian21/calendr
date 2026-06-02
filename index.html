@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Meeting Poll</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        /* (The CSS remains exactly the same as before) */
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --text: #0f172a;
+            --border: #e2e8f0;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            line-height: 1.5;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            margin-bottom: 2rem;
+        }
+        h1, h2 { margin-top: 0; }
+        input[type="text"] {
+            width: 100%;
+            padding: 0.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+        th, td {
+            border: 1px solid var(--border);
+            padding: 0.75rem;
+            text-align: center;
+        }
+        th { background-color: #f1f5f9; }
+        input[type="checkbox"] {
+            width: 1.2rem;
+            height: 1.2rem;
+            cursor: pointer;
+        }
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover { background-color: var(--primary-hover); }
+        button:disabled { background-color: #94a3b8; cursor: not-allowed; }
+        .result-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .result-item:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>Schedule a Meeting</h1>
+        <p>Enter your name and select all the times you are available.</p>
+        
+        <input type="text" id="voterName" placeholder="Your Name (e.g., Alex)" required>
+        
+        <table id="pollTable">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Wed (Jun 3)</th>
+                    <th>Thu (Jun 4)</th>
+                    <th>Fri (Jun 5)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Morning (10 AM)</strong></td>
+                    <td><input type="checkbox" value="Wed Morning"></td>
+                    <td><input type="checkbox" value="Thu Morning"></td>
+                    <td><input type="checkbox" value="Fri Morning"></td>
+                </tr>
+                <tr>
+                    <td><strong>Afternoon (2 PM)</strong></td>
+                    <td><input type="checkbox" value="Wed Afternoon"></td>
+                    <td><input type="checkbox" value="Thu Afternoon"></td>
+                    <td><input type="checkbox" value="Fri Afternoon"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <button id="submitBtn" onclick="submitVote()">Submit Availability</button>
+    </div>
+
+    <div class="card">
+        <h2>Current Results</h2>
+        <div id="resultsContainer">
+            <p>Loading votes from database...</p>
+        </div>
+    </div>
+
+    <script>
+        // 2. Initialize Supabase Client
+        // REPLACE THESE STRINGS WITH YOUR ACTUAL URL AND KEY FROM SUPABASE
+        const SUPABASE_URL = 'https://ueroccscvjfvmufjxwre.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlcm9jY3Njdmpmdm11Zmp4d3JlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzODUwMjEsImV4cCI6MjA5NTk2MTAyMX0.rsGF_44kiazj8DL54E65ZVnm4nqqy1OxDKe49OCB6Ds';
+
+        const { createClient } = supabase;
+        const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let votesDB = [];
+
+        // 3. Fetch existing votes when the page loads
+        async function fetchVotes() {
+            // Ask Supabase for all records in the 'meeting_votes' table
+            const { data, error } = await db.from('meeting_votes').select('*');
+            
+            if (error) {
+                console.error("Error fetching votes:", error);
+                document.getElementById('resultsContainer').innerHTML = "<p>Error loading votes.</p>";
+                return;
+            }
+
+            votesDB = data;
+            renderResults();
+        }
+
+        // 4. Save a new vote
+        async function submitVote() {
+            const nameInput = document.getElementById('voterName').value.trim();
+            if (!nameInput) {
+                alert("Please enter your name!");
+                return;
+            }
+
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+            const availableSlots = Array.from(checkboxes).map(cb => cb.value);
+
+            if (availableSlots.length === 0) {
+                alert("Please select at least one time slot!");
+                return;
+            }
+
+            // Disable button while saving
+            const btn = document.getElementById('submitBtn');
+            btn.innerText = "Saving...";
+            btn.disabled = true;
+
+            const newVote = {
+                name: nameInput,
+                slots: availableSlots
+            };
+
+            // Send the data to the Supabase table
+            const { error } = await db.from('meeting_votes').insert([newVote]);
+
+            // Re-enable button
+            btn.innerText = "Submit Availability";
+            btn.disabled = false;
+
+            if (error) {
+                console.error("Error saving vote:", error);
+                alert("There was an error saving your vote. Check console.");
+            } else {
+                // If successful, clear form and re-fetch the database to show updated results
+                document.getElementById('voterName').value = '';
+                document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                alert("Thanks for voting!");
+                fetchVotes(); 
+            }
+        }
+
+        // 5. Calculate and display the results
+        function renderResults() {
+            const container = document.getElementById('resultsContainer');
+            
+            if (votesDB.length === 0) {
+                container.innerHTML = "<p>No votes yet.</p>";
+                return;
+            }
+
+            const slotCounts = {};
+            votesDB.forEach(vote => {
+                // Because we saved slots as JSONB, Supabase returns them as standard JavaScript arrays
+                vote.slots.forEach(slot => {
+                    if (!slotCounts[slot]) slotCounts[slot] = [];
+                    slotCounts[slot].push(vote.name);
+                });
+            });
+
+            let html = "";
+            for (const [slot, names] of Object.entries(slotCounts)) {
+                html += `
+                    <div class="result-item">
+                        <strong>${slot}</strong> - ${names.length} vote(s)
+                        <br>
+                        <span style="font-size: 0.9em; color: #64748b;">
+                            Available: ${names.join(', ')}
+                        </span>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+
+        // Kick off the data fetch immediately
+        fetchVotes();
+    </script>
+</body>
+</html>
