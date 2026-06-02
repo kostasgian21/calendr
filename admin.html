@@ -33,9 +33,10 @@
         </div>
         <div id="daysList" class="list-box">No days added.</div>
 
-        <h3>2. Set Time Slots</h3>
+		<h3>2. Set Time Slots</h3>
         <div class="flex">
-            <input type="text" id="timeInput" placeholder="e.g., 9:00 AM or Morning">
+            <select id="timeSelect">
+                </select>
             <button onclick="addTime()">Add Time</button>
         </div>
         <div id="slotsList" class="list-box">No times added.</div>
@@ -56,6 +57,29 @@
 
         let selectedDays = [];
         let selectedSlots = [];
+		
+		// Auto-generate time slots from 8 AM to 8 PM
+        function populateTimeDropdown() {
+            const select = document.getElementById('timeSelect');
+            const startHour = 8; // 8 AM
+            const endHour = 20;  // 8 PM (20:00)
+
+            for (let i = startHour; i <= endHour; i++) {
+                // Convert 24h time to 12h AM/PM format
+                let hour12 = i > 12 ? i - 12 : i;
+                let ampm = i >= 12 ? 'PM' : 'AM';
+                let timeString = `${hour12}:00 ${ampm}`;
+
+                // Add the option to the dropdown
+                let option = document.createElement('option');
+                option.value = timeString;
+                option.text = timeString;
+                select.appendChild(option);
+            }
+        }
+        
+        // Run the function immediately when the page loads
+        populateTimeDropdown();
 
         function addDate() {
             const dateVal = document.getElementById('datePicker').value;
@@ -69,10 +93,14 @@
             updateUI();
         }
 
-        function addTime() {
-            const timeVal = document.getElementById('timeInput').value.trim();
-            if (timeVal && !selectedSlots.includes(timeVal)) selectedSlots.push(timeVal);
-            document.getElementById('timeInput').value = '';
+			function addTime() {
+            // Read the selected value from the dropdown
+            const timeVal = document.getElementById('timeSelect').value;
+            
+            // Add it to our list if it isn't already there
+            if (timeVal && !selectedSlots.includes(timeVal)) {
+                selectedSlots.push(timeVal);
+            }
             updateUI();
         }
 
