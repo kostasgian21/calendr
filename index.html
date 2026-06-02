@@ -79,7 +79,6 @@
     </style>
 </head>
 <body>
-
     <div class="card">
         <h1>Schedule a Meeting</h1>
         <p>Enter your name and select all the times you are available.</p>
@@ -87,28 +86,10 @@
         <input type="text" id="voterName" placeholder="Your Name (e.g., Alex)" required>
         
         <table id="pollTable">
-            <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>Wed (Jun 3)</th>
-                    <th>Thu (Jun 4)</th>
-                    <th>Fri (Jun 5)</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><strong>Morning (10 AM)</strong></td>
-                    <td><input type="checkbox" value="Wed Morning"></td>
-                    <td><input type="checkbox" value="Thu Morning"></td>
-                    <td><input type="checkbox" value="Fri Morning"></td>
-                </tr>
-                <tr>
-                    <td><strong>Afternoon (2 PM)</strong></td>
-                    <td><input type="checkbox" value="Wed Afternoon"></td>
-                    <td><input type="checkbox" value="Thu Afternoon"></td>
-                    <td><input type="checkbox" value="Fri Afternoon"></td>
-                </tr>
-            </tbody>
+            <thead id="tableHead">
+                </thead>
+            <tbody id="tableBody">
+                </tbody>
         </table>
 
         <button id="submitBtn" onclick="submitVote()">Submit Availability</button>
@@ -122,32 +103,60 @@
     </div>
 
     <script>
-        // 2. Initialize Supabase Client
-        // REPLACE THESE STRINGS WITH YOUR ACTUAL URL AND KEY FROM SUPABASE
+        // --- 1. YOUR POLL CONFIGURATION ---
+        // Change these arrays whenever you want to set up a new poll!
+        const POLL_DAYS = ["Wed (Jun 10)", "Thu (Jun 11)", "Fri (Jun 12)"];
+        const POLL_SLOTS = ["Morning (10 AM)", "Afternoon (2 PM)", "Evening (6 PM)"];
+
+
+        // --- 2. SUPABASE SETUP ---
+        // (Make sure to paste your actual URL and Anon Key here again)
         const SUPABASE_URL = 'https://ueroccscvjfvmufjxwre.supabase.co'; 
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlcm9jY3Njdmpmdm11Zmp4d3JlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzODUwMjEsImV4cCI6MjA5NTk2MTAyMX0.rsGF_44kiazj8DL54E65ZVnm4nqqy1OxDKe49OCB6Ds';
 
         const { createClient } = supabase;
         const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
         let votesDB = [];
 
-        // 3. Fetch existing votes when the page loads
+        // --- 3. DYNAMICALLY BUILD THE TABLE ---
+        function renderTable() {
+            const thead = document.getElementById('tableHead');
+            const tbody = document.getElementById('tableBody');
+
+            // Build the header row
+            let headerHTML = '<tr><th>Time</th>';
+            POLL_DAYS.forEach(day => {
+                headerHTML += `<th>${day}</th>`;
+            });
+            headerHTML += '</tr>';
+            thead.innerHTML = headerHTML;
+
+            // Build the rows for each time slot
+            let bodyHTML = '';
+            POLL_SLOTS.forEach(slot => {
+                bodyHTML += `<tr><td><strong>${slot}</strong></td>`;
+                POLL_DAYS.forEach(day => {
+                    // Combine day and slot for a unique value (e.g., "Wed (Jun 10) - Morning (10 AM)")
+                    const checkboxValue = `${day} - ${slot}`;
+                    bodyHTML += `<td><input type="checkbox" value="${checkboxValue}"></td>`;
+                });
+                bodyHTML += `</tr>`;
+            });
+            tbody.innerHTML = bodyHTML;
+        }
+
+        // --- 4. DATABASE FUNCTIONS ---
         async function fetchVotes() {
-            // Ask Supabase for all records in the 'meeting_votes' table
             const { data, error } = await db.from('meeting_votes').select('*');
-            
             if (error) {
                 console.error("Error fetching votes:", error);
                 document.getElementById('resultsContainer').innerHTML = "<p>Error loading votes.</p>";
                 return;
             }
-
             votesDB = data;
             renderResults();
         }
 
-        // 4. Save a new vote
         async function submitVote() {
             const nameInput = document.getElementById('voterName').value.trim();
             if (!nameInput) {
@@ -163,7 +172,6 @@
                 return;
             }
 
-            // Disable button while saving
             const btn = document.getElementById('submitBtn');
             btn.innerText = "Saving...";
             btn.disabled = true;
@@ -173,18 +181,15 @@
                 slots: availableSlots
             };
 
-            // Send the data to the Supabase table
             const { error } = await db.from('meeting_votes').insert([newVote]);
 
-            // Re-enable button
             btn.innerText = "Submit Availability";
             btn.disabled = false;
 
             if (error) {
                 console.error("Error saving vote:", error);
-                alert("There was an error saving your vote. Check console.");
+                alert("There was an error saving your vote.");
             } else {
-                // If successful, clear form and re-fetch the database to show updated results
                 document.getElementById('voterName').value = '';
                 document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
                 alert("Thanks for voting!");
@@ -192,7 +197,6 @@
             }
         }
 
-        // 5. Calculate and display the results
         function renderResults() {
             const container = document.getElementById('resultsContainer');
             
@@ -203,15 +207,17 @@
 
             const slotCounts = {};
             votesDB.forEach(vote => {
-                // Because we saved slots as JSONB, Supabase returns them as standard JavaScript arrays
                 vote.slots.forEach(slot => {
                     if (!slotCounts[slot]) slotCounts[slot] = [];
                     slotCounts[slot].push(vote.name);
                 });
             });
 
+            // Sort results so the most popular slots appear at the top
+            const sortedSlots = Object.entries(slotCounts).sort((a, b) => b[1].length - a[1].length);
+
             let html = "";
-            for (const [slot, names] of Object.entries(slotCounts)) {
+            for (const [slot, names] of sortedSlots) {
                 html += `
                     <div class="result-item">
                         <strong>${slot}</strong> - ${names.length} vote(s)
@@ -225,7 +231,8 @@
             container.innerHTML = html;
         }
 
-        // Kick off the data fetch immediately
+        // Initialize everything
+        renderTable();
         fetchVotes();
     </script>
 </body>
